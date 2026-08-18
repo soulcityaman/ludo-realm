@@ -1,10 +1,13 @@
-import '@vly-ai/integrations';
+import "@vly-ai/integrations";
 import { Toaster } from "@/components/ui/sonner";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
-import React, { StrictMode, lazy, Suspense, useState, useCallback } from "react";
+import React, { StrictMode, lazy, Suspense, useState, useCallback, useEffect } from "react";
 import { createRoot } from "react-dom/client";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import "./index.css";
 
 import type { PlayerColor } from "@/lib/game/constants";
@@ -12,6 +15,7 @@ import { TWO_PLAYER_COLORS } from "@/lib/game/constants";
 
 // Lazy load route components
 const Landing = lazy(() => import("./pages/Landing.tsx"));
+const Lobby = lazy(() => import("./components/ludo/Lobby.tsx"));
 const GameView = lazy(() => import("./components/ludo/GameView.tsx"));
 
 function RouteLoading() {
@@ -60,59 +64,135 @@ class RootErrorBoundary extends React.Component<
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
-type AppView = "landing" | "game";
+type AppView = "landing" | "lobby" | "game";
 
-export default function App() {
+interface RoomState {
+  roomId: Id<"rooms">;
+  code: string;
+  playerNames: Record<PlayerColor, string>;
+  isHost: boolean;
+  myColor: PlayerColor;
+}
+
+/** Inner app that uses Convex hooks */
+function AppInner() {
   const [view, setView] = useState<AppView>("landing");
-  const [playerNames, setPlayerNames] = useState<Record<PlayerColor, string>>({
-    red: "Player 1",
-    green: "Player 2",
-    yellow: "Player 3",
-    blue: "Player 4",
-  });
+  const [roomState, setRoomState] = useState<RoomState | null>(null);
 
-  const handleCreateRoom = useCallback((hostName: string, hostColor: PlayerColor) => {
-    const names = { ...playerNames };
-    names[hostColor] = hostName;
-    const opponentColor = TWO_PLAYER_COLORS.find((c) => c !== hostColor) ?? "yellow";
-    names[opponentColor] = "Opponent";
-    setPlayerNames(names);
-    setView("game");
-  }, [playerNames]);
+  // Subscribe to room data for lobby
+  const room = useQuery(
+    api.rooms.getById,
+    roomState?.roomId ? { roomId: roomState.roomId } : "skip"
+  );
 
-  const handleJoinRoom = useCallback((_code: string, guestName: string, guestColor: PlayerColor) => {
-    const names = { ...playerNames };
-    names[guestColor] = guestName;
-    const hostColor = TWO_PLAYER_COLORS.find((c) => c !== guestColor) ?? "red";
-    names[hostColor] = "Opponent";
-    setPlayerNames(names);
-    setView("game");
-  }, [playerNames]);
+  const startGame = useMutation(api.rooms.startGame);
 
-  const handleLeave = useCallback(() => {
-    setView("landing");
+  // Check for room code in URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const roomCode = params.get("room");
+    if (roomCode) {
+      // The Landing component handles joining via URL
+      // Clear the URL param
+      window.history.replaceState({}, "", window.location.pathname);
+    }
   }, []);
 
+  // Handle room creation from Landing
+  const handleRoomCreated = useCallback((
+    roomId: Id<"rooms">,
+    code: string,
+    playerNames: Record<PlayerColor, string>,
+    isHost: boolean,
+  ) => {
+    const myColor = isHost
+      ? TWO_PLAYER_COLORS.find((c) => playerNames[c] !== "Player 1" && playerNames[c] !== "Player 2" && playerNames[c] !== "Player 3" && playerNames[c] !== "Player 4") ?? "red"
+      : TWO_PLAYER_COLORS.find((c) => playerNames[c] !== "Host" && playerNames[c] !== "Player 1" && playerNames[c] !== "Player 2" && playerNames[c] !== "Player 3" && playerNames[c] !== "Player 4") ?? "yellow";
+
+    setRoomState({
+      roomId,
+      code,
+      playerNames,
+      isHost,
+      myColor,
+    });
+    setView("lobby");
+  }, []);
+
+  // Handle game start from Lobby
+  const handleStartGame = useCallback(async (initialState: Parameters<typeof startGame>[0]["initialState"]) => {
+    if (!roomState) return;
+
+    try {
+      const result = await startGame({
+        roomId: roomState.roomId,
+        initialState,
+      });
+
+      if (result && "error" in result && result.error) {
+        console.error("Failed to start game:", result.error);
+        return;
+      }
+
+      setView("game");
+    } catch (err) {
+      console.error("Failed to start game:", err);
+    }
+  }, [roomState, startGame]);
+
+  // Handle leaving
+  const handleLeave = useCallback(() => {
+    setRoomState(null);
+    setView("landing");
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
+
+  // Auto-transition to game if room status changes to playing
+  useEffect(() => {
+    if (room?.status === "playing" && view === "lobby" && roomState) {
+      setView("game");
+    }
+  }, [room?.status, view, roomState]);
+
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      {view === "landing" && (
+        <Landing onRoomCreated={handleRoomCreated} />
+      )}
+      {view === "lobby" && roomState && room && (
+        <Lobby
+          roomCode={roomState.code}
+          hostName={room.hostName}
+          hostColor={room.hostColor as PlayerColor}
+          guestName={room.guestName ?? null}
+          guestColor={room.guestColor as PlayerColor | null}
+          isHost={roomState.isHost}
+          onStartGame={handleStartGame}
+          onLeave={handleLeave}
+        />
+      )}
+      {view === "game" && roomState && (
+        <GameView
+          roomId={roomState.roomId}
+          roomCode={roomState.code}
+          playerNames={roomState.playerNames}
+          myColor={roomState.myColor}
+          isHost={roomState.isHost}
+          onLeave={handleLeave}
+        />
+      )}
+    </Suspense>
+  );
+}
+
+export default function App() {
   return (
     <RootErrorBoundary>
       <ToolbarErrorBoundary>
         <VlyToolbar />
       </ToolbarErrorBoundary>
       <ConvexAuthProvider client={convex}>
-        <Suspense fallback={<RouteLoading />}>
-          {view === "landing" && (
-            <Landing
-              onCreateRoom={handleCreateRoom}
-              onJoinRoom={handleJoinRoom}
-            />
-          )}
-          {view === "game" && (
-            <GameView
-              playerNames={playerNames}
-              onLeave={handleLeave}
-            />
-          )}
-        </Suspense>
+        <AppInner />
         <Toaster />
       </ConvexAuthProvider>
     </RootErrorBoundary>

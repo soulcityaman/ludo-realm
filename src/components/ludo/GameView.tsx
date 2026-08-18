@@ -1,9 +1,13 @@
 /**
  * GameView — the complete game screen for an active Ludo game.
+ * Uses Convex for real-time game state sync between players.
  * Combines board, dice, HUDs, turn timer, and victory overlay.
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import LudoBoard from "./LudoBoard";
 import DiceRoller from "./DiceRoller";
 import PlayerHUD from "./PlayerHUD";
@@ -24,34 +28,75 @@ import {
 } from "@/lib/game/logic";
 
 interface GameViewProps {
+  roomId: Id<"rooms">;
+  roomCode: string;
   playerNames: Record<PlayerColor, string>;
+  myColor: PlayerColor;
+  isHost: boolean;
   onLeave: () => void;
 }
 
-export default function GameView({ playerNames, onLeave }: GameViewProps) {
-  const [gameState, setGameState] = useState<GameState>(() =>
-    createInitialState(TWO_PLAYER_COLORS, playerNames),
-  );
+export default function GameView({
+  roomId,
+  roomCode,
+  playerNames,
+  myColor,
+  isHost,
+  onLeave,
+}: GameViewProps) {
+  // Convex subscription for real-time room state
+  const room = useQuery(api.rooms.getById, { roomId });
+  const updateGameState = useMutation(api.rooms.updateGameState);
+  const endGame = useMutation(api.rooms.endGame);
+
+  // Local UI state
   const [timerPercent, setTimerPercent] = useState(100);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [eventMessage, setEventMessage] = useState<string | null>(null);
+  const [optimisticState, setOptimisticState] = useState<GameState | null>(null);
 
-  const activePlayer = currentPlayer(gameState);
-  const isMyTurn = true; // In local play, both players share the device
+  // Get game state from room (with optimistic updates)
+  const gameState: GameState | null = optimisticState ?? (room?.gameState as GameState | undefined) ?? null;
+
+  // Sync optimistic state back to server
+  useEffect(() => {
+    if (optimisticState && room?.status === "playing") {
+      updateGameState({ roomId, gameState: optimisticState }).then(() => {
+        setOptimisticState(null);
+      }).catch(console.error);
+    }
+  }, [optimisticState, roomId, room?.status, updateGameState]);
+
+  const activePlayer = gameState ? currentPlayer(gameState) : null;
+  const isMyTurn = activePlayer?.color === myColor;
+
+  // Precompute player info to avoid implicit any in .find()
+  const opponentColor = TWO_PLAYER_COLORS.find((c) => c !== myColor) ?? "yellow";
+  const myPlayer = gameState
+    ? gameState.players.find((p: { color: PlayerColor }) => p.color === myColor) ?? null
+    : null;
+  const opponentPlayer = gameState
+    ? gameState.players.find((p: { color: PlayerColor }) => p.color === opponentColor) ?? null
+    : null;
+  const myPlayerIndex = gameState
+    ? gameState.players.findIndex((p: { color: PlayerColor }) => p.color === myColor)
+    : -1;
+  const opponentPlayerIndex = gameState
+    ? gameState.players.findIndex((p: { color: PlayerColor }) => p.color === opponentColor)
+    : -1;
 
   // ─── Timer ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (gameState.phase === "finished") return;
+    if (!gameState || gameState.phase === "finished" || !isMyTurn) return;
 
     setTimerPercent(100);
 
     timerRef.current = setInterval(() => {
       setTimerPercent((prev) => {
-        const next = prev - 100 / (TURN_TIME_LIMIT * 10); // Update every 100ms
+        const next = prev - 100 / (TURN_TIME_LIMIT * 10);
         if (next <= 0) {
-          // Auto-skip
-          setGameState((prev) => autoSkipTurn(prev));
+          handleAutoSkip();
           return 100;
         }
         return next;
@@ -61,16 +106,28 @@ export default function GameView({ playerNames, onLeave }: GameViewProps) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [gameState.currentPlayerIndex, gameState.phase]);
+  }, [gameState?.currentPlayerIndex, gameState?.phase, isMyTurn]);
+
+  const handleAutoSkip = useCallback(async () => {
+    if (!gameState || !isMyTurn) return;
+    const newState = autoSkipTurn(gameState);
+    setOptimisticState(newState);
+    try {
+      await updateGameState({ roomId, gameState: newState });
+      setOptimisticState(null);
+    } catch (err) {
+      console.error("Failed to auto-skip:", err);
+    }
+  }, [gameState, isMyTurn, roomId, updateGameState]);
 
   // ─── Event messages ──────────────────────────────────────────────
   useEffect(() => {
-    if (gameState.lastEvent) {
+    if (gameState?.lastEvent) {
       setEventMessage(gameState.lastEvent);
       const timeout = setTimeout(() => setEventMessage(null), 2500);
       return () => clearTimeout(timeout);
     }
-  }, [gameState.lastEvent, gameState.moveHistory.length]);
+  }, [gameState?.lastEvent, gameState?.moveHistory.length]);
 
   // ─── Sound effects ───────────────────────────────────────────────
   const playSound = useCallback(
@@ -122,41 +179,77 @@ export default function GameView({ playerNames, onLeave }: GameViewProps) {
   );
 
   // ─── Actions ─────────────────────────────────────────────────────
-  const handleRoll = useCallback(() => {
+  const handleRoll = useCallback(async () => {
+    if (!gameState || !isMyTurn) return;
     playSound("roll");
-    setGameState((prev) => rollDice(prev));
-  }, [playSound]);
+    const newState = rollDice(gameState);
+    setOptimisticState(newState);
+    try {
+      await updateGameState({ roomId, gameState: newState });
+      setOptimisticState(null);
+    } catch (err) {
+      console.error("Failed to roll dice:", err);
+      setOptimisticState(null);
+    }
+  }, [gameState, isMyTurn, roomId, updateGameState, playSound]);
 
   const handleTokenClick = useCallback(
-    (playerIndex: number, tokenIndex: number) => {
+    async (playerIndex: number, tokenIndex: number) => {
+      if (!gameState || !isMyTurn) return;
+
       const player = gameState.players[playerIndex];
-      if (player.color !== activePlayer.color) return;
+      if (player.color !== myColor) return;
       if (!gameState.movableTokens.includes(tokenIndex)) return;
 
-      const token = gameState.players[playerIndex].tokens[tokenIndex];
-      const wasOnBoard = token.position >= 0 && token.position < 58;
-
       playSound("move");
-      setGameState((prev) => {
-        const newState = moveToken(prev, tokenIndex);
-        // Check if a capture happened
-        const lastMove = newState.moveHistory[newState.moveHistory.length - 1];
-        if (lastMove?.captured) {
-          playSound("capture");
+      const newState = moveToken(gameState, tokenIndex);
+
+      // Check if a capture happened
+      const lastMove = newState.moveHistory[newState.moveHistory.length - 1];
+      if (lastMove?.captured) {
+        playSound("capture");
+      }
+      if (newState.winner) {
+        playSound("win");
+        try {
+          await endGame({ roomId, winnerColor: newState.winner });
+        } catch (err) {
+          console.error("Failed to end game:", err);
         }
-        if (newState.winner) {
-          playSound("win");
-        }
-        return newState;
-      });
+      }
+
+      setOptimisticState(newState);
+      try {
+        await updateGameState({ roomId, gameState: newState });
+        setOptimisticState(null);
+      } catch (err) {
+        console.error("Failed to move token:", err);
+        setOptimisticState(null);
+      }
     },
-    [gameState, activePlayer, playSound],
+    [gameState, isMyTurn, myColor, roomId, updateGameState, endGame, playSound],
   );
 
-  const handleRematch = useCallback(() => {
-    setGameState(createInitialState(TWO_PLAYER_COLORS, playerNames));
-    setTimerPercent(100);
-  }, [playerNames]);
+  const handleRematch = useCallback(async () => {
+    const newState = createInitialState(TWO_PLAYER_COLORS, playerNames);
+    setOptimisticState(newState);
+    try {
+      await updateGameState({ roomId, gameState: newState });
+      setOptimisticState(null);
+      setTimerPercent(100);
+    } catch (err) {
+      console.error("Failed to start rematch:", err);
+    }
+  }, [roomId, playerNames, updateGameState]);
+
+  // Loading state
+  if (!gameState || !activePlayer || !myPlayer || !opponentPlayer) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-stone-100 flex flex-col items-center justify-center p-4">
+        <div className="animate-pulse text-stone-400 text-sm">Loading game...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-stone-100 flex flex-col items-center p-4 relative overflow-hidden">
@@ -180,8 +273,13 @@ export default function GameView({ playerNames, onLeave }: GameViewProps) {
         >
           ← Leave
         </button>
-        <div className="text-xs font-medium text-stone-400 uppercase tracking-wider">
-          Ludo
+        <div className="flex flex-col items-center">
+          <div className="text-xs font-medium text-stone-400 uppercase tracking-wider">
+            Room {roomCode}
+          </div>
+          <div className="text-[10px] text-stone-300">
+            {isMyTurn ? "🎯 Your Turn" : `⏳ ${opponentPlayer.name}'s Turn`}
+          </div>
         </div>
         <button
           onClick={() => setSoundEnabled(!soundEnabled)}
@@ -193,13 +291,17 @@ export default function GameView({ playerNames, onLeave }: GameViewProps) {
       </div>
 
       <div className="w-full max-w-lg flex flex-col items-center gap-4 relative z-10">
-        {/* Top player HUD */}
+        {/* Top player HUD (opponent) */}
         <div className="w-full">
           <PlayerHUD
-            player={gameState.players[0]}
-            isActive={gameState.currentPlayerIndex === 0}
-            timerPercent={gameState.currentPlayerIndex === 0 ? timerPercent : 0}
-            isCurrentTurn={gameState.currentPlayerIndex === 0}
+            player={opponentPlayer}
+            isActive={gameState.currentPlayerIndex === opponentPlayerIndex}
+            timerPercent={
+              gameState.currentPlayerIndex === opponentPlayerIndex
+                ? timerPercent
+                : 0
+            }
+            isCurrentTurn={gameState.currentPlayerIndex === opponentPlayerIndex}
           />
         </div>
 
@@ -207,19 +309,24 @@ export default function GameView({ playerNames, onLeave }: GameViewProps) {
         <div className="w-full max-w-[min(85vw,420px)]">
           <LudoBoard
             players={gameState.players}
-            movableTokens={gameState.movableTokens}
+            movableTokens={isMyTurn ? gameState.movableTokens : []}
             currentPlayerColor={activePlayer.color}
             onTokenClick={handleTokenClick}
           />
         </div>
 
-        {/* Bottom player HUD */}
+        {/* Bottom player HUD (me) */}
         <div className="w-full">
           <PlayerHUD
-            player={gameState.players[1]}
-            isActive={gameState.currentPlayerIndex === 1}
-            timerPercent={gameState.currentPlayerIndex === 1 ? timerPercent : 0}
-            isCurrentTurn={gameState.currentPlayerIndex === 1}
+            player={myPlayer}
+            isActive={gameState.currentPlayerIndex === myPlayerIndex}
+            timerPercent={
+              gameState.currentPlayerIndex === myPlayerIndex
+                ? timerPercent
+                : 0
+            }
+            isCurrentTurn={gameState.currentPlayerIndex === myPlayerIndex}
+            isMe={true}
           />
         </div>
 
@@ -239,16 +346,28 @@ export default function GameView({ playerNames, onLeave }: GameViewProps) {
             )}
           </AnimatePresence>
 
+          {/* Not your turn indicator */}
+          {!isMyTurn && gameState.phase !== "finished" && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-center gap-2 text-stone-500 text-sm"
+            >
+              <div className="animate-pulse">⏳</div>
+              <span>Waiting for {opponentPlayer.name}...</span>
+            </motion.div>
+          )}
+
           {/* Dice roller */}
           <DiceRoller
             diceValue={gameState.diceValue}
-            canRoll={gameState.phase === "rolling" && !gameState.hasRolled}
+            canRoll={gameState.phase === "rolling" && !gameState.hasRolled && isMyTurn}
             playerColor={activePlayer.color}
             onRoll={handleRoll}
           />
 
           {/* Instruction */}
-          {gameState.phase === "moving" && gameState.movableTokens.length > 1 && (
+          {gameState.phase === "moving" && gameState.movableTokens.length > 1 && isMyTurn && (
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

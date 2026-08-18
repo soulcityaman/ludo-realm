@@ -27,9 +27,10 @@ const schema = defineSchema(
       guestName: v.optional(v.string()),
       guestColor: v.optional(v.string()),
       gameState: v.optional(v.any()),
-      status: v.string(), // "waiting" | "playing" | "finished"
+      status: v.string(), // "waiting" | "lobby" | "playing" | "finished"
       createdAt: v.number(),
       lastActivity: v.number(),
+      winnerColor: v.optional(v.string()),
     }).index("by_code", ["code"]),
   },
   {

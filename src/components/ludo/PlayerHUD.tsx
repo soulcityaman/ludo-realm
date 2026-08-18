@@ -13,6 +13,7 @@ interface PlayerHUDProps {
   isActive: boolean;
   timerPercent: number;
   isCurrentTurn: boolean;
+  isMe?: boolean;
 }
 
 /** Token indicator shapes for accessibility */
@@ -23,6 +24,7 @@ export default function PlayerHUD({
   isActive,
   timerPercent,
   isCurrentTurn,
+  isMe = false,
 }: PlayerHUDProps) {
   const hex = COLOR_HEX[player.color];
   const finishedCount = player.tokens.filter((t) => isFinished(t.position)).length;
@@ -74,6 +76,11 @@ export default function PlayerHUD({
             <span className="font-semibold text-sm truncate text-stone-800">
               {player.name}
             </span>
+            {isMe && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-200 text-stone-600">
+                YOU
+              </span>
+            )}
             {isCurrentTurn && (
               <span
                 className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
@@ -88,14 +95,14 @@ export default function PlayerHUD({
           <div className="flex items-center gap-1 mt-1">
             {Array.from({ length: TOKENS_PER_PLAYER }).map((_, i) => {
               const token = player.tokens[i];
-              const isFinished = token.position >= 58;
+              const finished = isFinished(token.position);
               const isHome = token.position === -1;
               return (
                 <span
                   key={i}
                   className="text-xs"
                   style={{
-                    color: isFinished
+                    color: finished
                       ? hex.base
                       : isHome
                         ? "#D4D4D8"
