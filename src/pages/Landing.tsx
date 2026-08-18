@@ -120,21 +120,15 @@ function HeroDice() {
   );
 }
 
-/** Premium form card wrapper */
+/** Form card wrapper */
 function GlassCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
     <div
       className={`w-full rounded-[2rem] p-6 ${className}`}
       style={{
-        background: "rgba(255, 255, 255, 0.65)",
-        backdropFilter: "blur(20px) saturate(200%)",
-        WebkitBackdropFilter: "blur(20px) saturate(200%)",
-        border: "1px solid rgba(255, 255, 255, 0.6)",
-        boxShadow: `
-          0 16px 48px rgba(0,0,0,0.08),
-          0 4px 16px rgba(0,0,0,0.04),
-          inset 0 1px 0 rgba(255, 255, 255, 0.8)
-        `,
+        backgroundColor: "rgba(255,255,255,0.85)",
+        border: "1px solid rgba(0,0,0,0.04)",
+        boxShadow: "0 12px 40px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)",
       }}
     >
       {children}
@@ -169,11 +163,9 @@ function GlassInput({
       maxLength={maxLength}
       className={`w-full px-4 py-3.5 rounded-2xl text-stone-800 text-sm font-medium placeholder:text-stone-400 focus:outline-none focus:ring-2 transition-all ${mono ? "font-mono tracking-widest" : ""}`}
       style={{
-        background: "rgba(255,255,255,0.7)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
+        backgroundColor: "#ffffff",
         border: "1px solid rgba(0,0,0,0.06)",
-        boxShadow: "inset 0 2px 4px rgba(0,0,0,0.04)",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.04), inset 0 2px 4px rgba(0,0,0,0.03)",
         // @ts-expect-error CSS custom property
         "--tw-ring-color": `${focusColor}40`,
       }}
@@ -280,39 +272,15 @@ export default function Landing({ onRoomCreated }: LandingProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-50 via-amber-50/30 to-stone-100 flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      {/* Background blobs — premium animated */}
+      {/* Background — simple static blobs */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <motion.div
-          animate={{ x: [0, 30, 0], y: [0, -20, 0], scale: [1, 1.1, 1] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-20 left-10 w-72 h-72 rounded-full opacity-[0.06]"
-          style={{
-            background: `radial-gradient(circle, ${COLOR_HEX.red.base} 0%, transparent 70%)`,
-          }}
-        />
-        <motion.div
-          animate={{ x: [0, -25, 0], y: [0, 25, 0], scale: [1, 1.15, 1] }}
-          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute bottom-20 right-10 w-80 h-80 rounded-full opacity-[0.06]"
-          style={{
-            background: `radial-gradient(circle, ${COLOR_HEX.blue.base} 0%, transparent 70%)`,
-          }}
-        />
-        <motion.div
-          animate={{ x: [0, 20, 0], y: [0, 20, 0], scale: [1, 1.05, 1] }}
-          transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-1/2 left-1/2 w-96 h-96 rounded-full opacity-[0.04]"
-          style={{
-            background: `radial-gradient(circle, ${COLOR_HEX.yellow.base} 0%, transparent 70%)`,
-          }}
-        />
-        {/* Grid texture overlay */}
         <div
-          className="absolute inset-0 opacity-[0.02]"
-          style={{
-            backgroundImage: "radial-gradient(circle at 1px 1px, rgba(0,0,0,0.15) 1px, transparent 0)",
-            backgroundSize: "24px 24px",
-          }}
+          className="absolute top-20 left-10 w-64 h-64 rounded-full opacity-[0.05]"
+          style={{ background: `radial-gradient(circle, ${COLOR_HEX.red.base}, transparent 70%)` }}
+        />
+        <div
+          className="absolute bottom-20 right-10 w-72 h-72 rounded-full opacity-[0.05]"
+          style={{ background: `radial-gradient(circle, ${COLOR_HEX.blue.base}, transparent 70%)` }}
         />
       </div>
 

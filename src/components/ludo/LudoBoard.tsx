@@ -43,31 +43,16 @@ const HomeBaseCell = memo(function HomeBaseCell({
   return (
     <div
       className="w-full h-full relative flex items-center justify-center"
-      style={{
-        background: `linear-gradient(135deg, ${hex.light} 0%, ${hex.light}dd 100%)`,
-      }}
+      style={{ backgroundColor: hex.light }}
     >
       {isCircleSlot ? (
         <div
-          className="w-[60%] h-[60%] rounded-full relative"
+          className="w-[58%] h-[58%] rounded-full"
           style={{
-            background: "linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(245,245,245,0.9) 100%)",
-            boxShadow: `
-              inset 0 2px 4px rgba(0,0,0,0.08),
-              inset 0 -1px 2px rgba(0,0,0,0.04),
-              0 1px 3px rgba(0,0,0,0.06)
-            `,
-            border: "1px solid rgba(255,255,255,0.8)",
+            backgroundColor: "white",
+            boxShadow: "inset 0 2px 4px rgba(0,0,0,0.08)",
           }}
-        >
-          {/* Slot ring */}
-          <div
-            className="absolute inset-[3px] rounded-full"
-            style={{
-              border: `1.5px dashed ${hex.base}30`,
-            }}
-          />
-        </div>
+        />
       ) : (
         <div
           className="w-[28%] h-[28%] rounded-full opacity-25"
@@ -91,19 +76,10 @@ const HomeColumnCell = memo(function HomeColumnCell({
     <div
       className="w-full h-full flex items-center justify-center relative overflow-hidden"
       style={{
-        background: index === 4
-          ? `linear-gradient(135deg, ${hex.dark} 0%, ${hex.base} 100%)`
-          : `linear-gradient(180deg, ${hex.base}ee 0%, ${hex.base} 100%)`,
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.1)",
+        backgroundColor: index === 4 ? hex.dark : hex.base,
       }}
     >
-      {/* Subtle texture */}
-      <div
-        className="absolute inset-0 opacity-10"
-        style={{
-          backgroundImage: `radial-gradient(circle at 50% 0%, rgba(255,255,255,0.8) 0%, transparent 60%)`,
-        }}
-      />
+
       {index === 4 && (
         <svg
           viewBox="0 0 24 24"
@@ -117,34 +93,17 @@ const HomeColumnCell = memo(function HomeColumnCell({
   );
 });
 
-/** Center goal cell — premium gradient with glow */
+/** Center goal cell */
 const CenterCell = memo(function CenterCell() {
   return (
     <div
-      className="w-full h-full flex items-center justify-center relative overflow-hidden"
+      className="w-full h-full flex items-center justify-center"
       style={{
         background: "linear-gradient(135deg, #E8606A 0%, #FFD93D 33%, #6BCB77 66%, #6CB4EE 100%)",
       }}
     >
-      {/* Glossy overlay */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.4) 0%, transparent 60%)",
-        }}
-      />
-      <div
-        className="w-[58%] h-[58%] rounded-full flex items-center justify-center relative"
-        style={{
-          background: "linear-gradient(145deg, rgba(255,255,255,0.98) 0%, rgba(245,245,245,0.95) 100%)",
-          boxShadow: `
-            0 4px 12px rgba(0,0,0,0.15),
-            inset 0 2px 0 rgba(255,255,255,0.9),
-            inset 0 -1px 0 rgba(0,0,0,0.05)
-          `,
-        }}
-      >
-        <svg viewBox="0 0 24 24" className="w-[55%] h-[55%] text-amber-400 drop-shadow-sm" fill="currentColor">
+      <div className="w-[58%] h-[58%] rounded-full flex items-center justify-center bg-white/90">
+        <svg viewBox="0 0 24 24" className="w-[55%] h-[55%] text-amber-400" fill="currentColor">
           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
         </svg>
       </div>
@@ -158,9 +117,7 @@ const ArmCell = memo(function ArmCell({ color }: { color: PlayerColor }) {
   return (
     <div
       className="w-full h-full"
-      style={{
-        background: `linear-gradient(135deg, ${hex.track}ee 0%, ${hex.track} 100%)`,
-      }}
+      style={{ backgroundColor: hex.track }}
     />
   );
 });
@@ -177,17 +134,10 @@ const TrackCell = memo(function TrackCell({
 }) {
   return (
     <div
-      className="w-full h-full flex items-center justify-center rounded-[1px] relative overflow-hidden"
+      className="w-full h-full flex items-center justify-center rounded-[1px]"
       style={{
-        background: isSafe
-          ? "linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(255,248,230,0.9) 100%)"
-          : "linear-gradient(145deg, rgba(255,255,255,0.9) 0%, rgba(250,250,250,0.85) 100%)",
-        border: isSafe
-          ? "1px solid rgba(255,200,50,0.3)"
-          : "0.5px solid rgba(0,0,0,0.06)",
-        boxShadow: isSafe
-          ? "inset 0 0 8px rgba(255,200,50,0.15)"
-          : "none",
+        backgroundColor: isSafe ? "#FFFDF0" : "#ffffff",
+        border: isSafe ? "1px solid rgba(255,200,50,0.3)" : "0.5px solid rgba(0,0,0,0.06)",
       }}
     >
       {isStart && startColor ? (
@@ -219,7 +169,7 @@ const PATH_INDEX_TO_START_COLOR: Record<number, PlayerColor> = {
   39: "red",
 };
 
-/** A single glossy token overlay on the board */
+/** A single token overlay on the board */
 function BoardToken({
   color,
   boardPos,
@@ -243,7 +193,7 @@ function BoardToken({
 
   return (
     <div
-      className="absolute flex items-center justify-center transition-all duration-300 ease-out pointer-events-none"
+      className="absolute flex items-center justify-center pointer-events-none"
       style={{
         width: tokenSize,
         height: tokenSize,
@@ -256,39 +206,21 @@ function BoardToken({
         onClick={onClick}
         disabled={!isSelectable}
         className={`
-          pointer-events-auto w-full h-full rounded-full relative overflow-hidden
+          pointer-events-auto w-full h-full rounded-full
           flex items-center justify-center
-          transition-all duration-200
-          ${isSelectable
-            ? "cursor-pointer hover:scale-110 active:scale-95"
-            : "cursor-default"
-          }
+          transition-transform duration-150
+          ${isSelectable ? "cursor-pointer hover:scale-110 active:scale-95" : "cursor-default"}
         `}
         style={{
-          background: `linear-gradient(145deg, ${hex.light} 0%, ${hex.base} 40%, ${hex.dark} 100%)`,
-          border: "2.5px solid rgba(255,255,255,0.85)",
+          backgroundColor: hex.base,
+          border: "2px solid rgba(255,255,255,0.8)",
           boxShadow: isSelectable
-            ? `0 0 0 3px ${hex.light}, 0 6px 20px rgba(0,0,0,0.3), inset 0 2px 0 rgba(255,255,255,0.4), inset 0 -2px 0 rgba(0,0,0,0.1)`
-            : `0 3px 10px rgba(0,0,0,0.25), inset 0 2px 0 rgba(255,255,255,0.35), inset 0 -2px 0 rgba(0,0,0,0.1)`,
+            ? `0 0 0 3px ${hex.light}, 0 4px 12px rgba(0,0,0,0.25)`
+            : `0 2px 6px rgba(0,0,0,0.2), inset 0 1px 2px rgba(255,255,255,0.3)`,
           animation: isSelectable ? "token-glow 1.5s ease-in-out infinite" : "none",
         }}
         aria-label={label}
-      >
-        {/* Glossy highlight */}
-        <div
-          className="absolute top-[12%] left-[18%] w-[40%] h-[40%] rounded-full pointer-events-none"
-          style={{
-            background: "linear-gradient(135deg, rgba(255,255,255,0.65) 0%, rgba(255,255,255,0) 100%)",
-          }}
-        />
-        {/* Inner ring */}
-        <div
-          className="w-[55%] h-[55%] rounded-full pointer-events-none"
-          style={{
-            border: "1.5px solid rgba(255,255,255,0.25)",
-          }}
-        />
-      </button>
+      />
     </div>
   );
 }
@@ -368,32 +300,13 @@ export default function LudoBoard({
 
   return (
     <div
-      className="relative w-full aspect-square rounded-[2rem] overflow-hidden"
+      className="relative w-full aspect-square rounded-3xl overflow-hidden"
       style={{
-        boxShadow: `
-          0 20px 60px rgba(0,0,0,0.15),
-          0 8px 24px rgba(0,0,0,0.08),
-          0 0 0 1px rgba(255,255,255,0.3),
-          inset 0 2px 0 rgba(255,255,255,0.5)
-        `,
-        border: "1px solid rgba(255,255,255,0.4)",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)",
       }}
     >
-      {/* Board background with subtle texture */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background: "linear-gradient(145deg, #F8F4EC 0%, #F2EDE4 50%, #EDE8DF 100%)",
-        }}
-      />
-
-      {/* Subtle radial texture */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.3) 0%, transparent 70%)",
-        }}
-      />
+      {/* Board background */}
+      <div className="absolute inset-0" style={{ backgroundColor: "#F5F0E8" }} />
 
       {/* Grid */}
       <div
@@ -410,14 +323,7 @@ export default function LudoBoard({
             className="relative"
             style={{ gridRow: row + 1, gridColumn: col + 1 }}
           >
-            {type === "empty" && (
-              <div
-                className="w-full h-full"
-                style={{
-                  background: "linear-gradient(145deg, rgba(235,232,226,0.6) 0%, rgba(230,227,221,0.6) 100%)",
-                }}
-              />
-            )}
+            {type === "empty" && <div className="w-full h-full bg-stone-100" />}
             {type === "home_base" && color && (
               <HomeBaseCell color={color} row={row} col={col} />
             )}

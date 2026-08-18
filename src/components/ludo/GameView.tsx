@@ -1,7 +1,6 @@
 /**
  * GameView — the complete game screen for an active Ludo game.
- * Uses Convex for real-time game state sync between players.
- * Combines board, dice, HUDs, turn timer, and victory overlay.
+ * Optimized for performance: no backdrop-filter, no animated blobs, efficient timer.
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,7 +15,6 @@ import {
   type PlayerColor,
   TWO_PLAYER_COLORS,
   TURN_TIME_LIMIT,
-  COLOR_HEX,
 } from "@/lib/game/constants";
 import {
   createInitialState,
@@ -44,22 +42,19 @@ export default function GameView({
   isHost,
   onLeave,
 }: GameViewProps) {
-  // Convex subscription for real-time room state
   const room = useQuery(api.rooms.getById, { roomId });
   const updateGameState = useMutation(api.rooms.updateGameState);
   const endGame = useMutation(api.rooms.endGame);
 
-  // Local UI state
   const [timerPercent, setTimerPercent] = useState(100);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [eventMessage, setEventMessage] = useState<string | null>(null);
   const [optimisticState, setOptimisticState] = useState<GameState | null>(null);
+  const autoSkipRef = useRef<(() => void) | null>(null);
 
-  // Get game state from room (with optimistic updates)
   const gameState: GameState | null = optimisticState ?? (room?.gameState as GameState | undefined) ?? null;
 
-  // Sync optimistic state back to server
+  // Sync optimistic state to server
   useEffect(() => {
     if (optimisticState && room?.status === "playing") {
       updateGameState({ roomId, gameState: optimisticState }).then(() => {
@@ -71,7 +66,6 @@ export default function GameView({
   const activePlayer = gameState ? currentPlayer(gameState) : null;
   const isMyTurn = activePlayer?.color === myColor;
 
-  // Precompute player info to avoid implicit any in .find()
   const opponentColor = TWO_PLAYER_COLORS.find((c) => c !== myColor) ?? "yellow";
   const myPlayer = gameState
     ? gameState.players.find((p: { color: PlayerColor }) => p.color === myColor) ?? null
@@ -86,29 +80,8 @@ export default function GameView({
     ? gameState.players.findIndex((p: { color: PlayerColor }) => p.color === opponentColor)
     : -1;
 
-  // ─── Timer ───────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!gameState || gameState.phase === "finished" || !isMyTurn) return;
-
-    setTimerPercent(100);
-
-    timerRef.current = setInterval(() => {
-      setTimerPercent((prev) => {
-        const next = prev - 100 / (TURN_TIME_LIMIT * 10);
-        if (next <= 0) {
-          handleAutoSkip();
-          return 100;
-        }
-        return next;
-      });
-    }, 100);
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [gameState?.currentPlayerIndex, gameState?.phase, isMyTurn]);
-
-  const handleAutoSkip = useCallback(async () => {
+  // Stable auto-skip callback
+  autoSkipRef.current = async () => {
     if (!gameState || !isMyTurn) return;
     const newState = autoSkipTurn(gameState);
     setOptimisticState(newState);
@@ -118,9 +91,41 @@ export default function GameView({
     } catch (err) {
       console.error("Failed to auto-skip:", err);
     }
-  }, [gameState, isMyTurn, roomId, updateGameState]);
+  };
 
-  // ─── Event messages ──────────────────────────────────────────────
+  // Timer — use requestAnimationFrame for smooth countdown, update state at lower frequency
+  useEffect(() => {
+    if (!gameState || gameState.phase === "finished" || !isMyTurn) return;
+
+    setTimerPercent(100);
+    const startTime = Date.now();
+    const durationMs = TURN_TIME_LIMIT * 1000;
+    let lastTick = 0;
+    let raf: number;
+
+    const tick = () => {
+      const elapsed = Date.now() - startTime;
+      const pct = Math.max(0, 100 - (elapsed / durationMs) * 100);
+
+      // Only update state every 500ms to avoid excessive re-renders
+      const tickBucket = Math.floor(elapsed / 500);
+      if (tickBucket !== lastTick) {
+        lastTick = tickBucket;
+        setTimerPercent(pct);
+      }
+
+      if (pct <= 0) {
+        autoSkipRef.current?.();
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [gameState?.currentPlayerIndex, gameState?.phase, isMyTurn]);
+
+  // Event messages
   useEffect(() => {
     if (gameState?.lastEvent) {
       setEventMessage(gameState.lastEvent);
@@ -129,7 +134,7 @@ export default function GameView({
     }
   }, [gameState?.lastEvent, gameState?.moveHistory.length]);
 
-  // ─── Sound effects ───────────────────────────────────────────────
+  // Sound effects
   const playSound = useCallback(
     (type: "roll" | "move" | "capture" | "win") => {
       if (!soundEnabled) return;
@@ -139,18 +144,15 @@ export default function GameView({
         const gain = ctx.createGain();
         osc.connect(gain);
         gain.connect(ctx.destination);
-
         switch (type) {
           case "roll":
             osc.frequency.value = 440;
-            osc.type = "sine";
             gain.gain.value = 0.1;
             osc.start();
             osc.stop(ctx.currentTime + 0.1);
             break;
           case "move":
             osc.frequency.value = 523;
-            osc.type = "sine";
             gain.gain.value = 0.08;
             osc.start();
             osc.stop(ctx.currentTime + 0.15);
@@ -164,7 +166,6 @@ export default function GameView({
             break;
           case "win":
             osc.frequency.value = 659;
-            osc.type = "sine";
             gain.gain.value = 0.12;
             osc.start();
             osc.frequency.linearRampToValueAtTime(880, ctx.currentTime + 0.3);
@@ -178,7 +179,6 @@ export default function GameView({
     [soundEnabled],
   );
 
-  // ─── Actions ─────────────────────────────────────────────────────
   const handleRoll = useCallback(async () => {
     if (!gameState || !isMyTurn) return;
     playSound("roll");
@@ -196,34 +196,23 @@ export default function GameView({
   const handleTokenClick = useCallback(
     async (playerIndex: number, tokenIndex: number) => {
       if (!gameState || !isMyTurn) return;
-
       const player = gameState.players[playerIndex];
       if (player.color !== myColor) return;
       if (!gameState.movableTokens.includes(tokenIndex)) return;
 
       playSound("move");
       const newState = moveToken(gameState, tokenIndex);
-
-      // Check if a capture happened
       const lastMove = newState.moveHistory[newState.moveHistory.length - 1];
-      if (lastMove?.captured) {
-        playSound("capture");
-      }
+      if (lastMove?.captured) playSound("capture");
       if (newState.winner) {
         playSound("win");
-        try {
-          await endGame({ roomId, winnerColor: newState.winner });
-        } catch (err) {
-          console.error("Failed to end game:", err);
-        }
+        try { await endGame({ roomId, winnerColor: newState.winner }); } catch {}
       }
-
       setOptimisticState(newState);
       try {
         await updateGameState({ roomId, gameState: newState });
         setOptimisticState(null);
-      } catch (err) {
-        console.error("Failed to move token:", err);
+      } catch {
         setOptimisticState(null);
       }
     },
@@ -233,40 +222,25 @@ export default function GameView({
   const handleRematch = useCallback(async () => {
     const newState = createInitialState(TWO_PLAYER_COLORS, playerNames);
     setOptimisticState(newState);
+    setTimerPercent(100);
     try {
       await updateGameState({ roomId, gameState: newState });
       setOptimisticState(null);
-      setTimerPercent(100);
-    } catch (err) {
-      console.error("Failed to start rematch:", err);
-    }
+    } catch {}
   }, [roomId, playerNames, updateGameState]);
 
-  // Loading state
   if (!gameState || !activePlayer || !myPlayer || !opponentPlayer) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-stone-100 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
         <div className="animate-pulse text-stone-400 text-sm">Loading game...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-stone-100 flex flex-col items-center p-4 relative overflow-hidden">
-      {/* Background decoration */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div
-          className="absolute -top-32 -right-32 w-96 h-96 rounded-full opacity-10"
-          style={{ backgroundColor: COLOR_HEX.red.light }}
-        />
-        <div
-          className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full opacity-10"
-          style={{ backgroundColor: COLOR_HEX.yellow.light }}
-        />
-      </div>
-
+    <div className="min-h-screen bg-stone-50 flex flex-col items-center p-4">
       {/* Top bar */}
-      <div className="w-full max-w-lg flex items-center justify-between mb-4 relative z-10">
+      <div className="w-full max-w-lg flex items-center justify-between mb-4">
         <button
           onClick={onLeave}
           className="text-sm text-stone-500 hover:text-stone-700 transition-colors font-medium"
@@ -277,36 +251,32 @@ export default function GameView({
           <div className="text-xs font-medium text-stone-400 uppercase tracking-wider">
             Room {roomCode}
           </div>
-          <div className="text-[10px] text-stone-300">
+          <div className="text-[10px] text-stone-400">
             {isMyTurn ? "🎯 Your Turn" : `⏳ ${opponentPlayer.name}'s Turn`}
           </div>
         </div>
         <button
           onClick={() => setSoundEnabled(!soundEnabled)}
           className="text-lg"
-          title={soundEnabled ? "Mute sounds" : "Enable sounds"}
+          title={soundEnabled ? "Mute" : "Unmute"}
         >
           {soundEnabled ? "🔊" : "🔇"}
         </button>
       </div>
 
-      <div className="w-full max-w-lg flex flex-col items-center gap-4 relative z-10">
-        {/* Top player HUD (opponent) */}
+      <div className="w-full max-w-lg flex flex-col items-center gap-3">
+        {/* Opponent HUD */}
         <div className="w-full">
           <PlayerHUD
             player={opponentPlayer}
             isActive={gameState.currentPlayerIndex === opponentPlayerIndex}
-            timerPercent={
-              gameState.currentPlayerIndex === opponentPlayerIndex
-                ? timerPercent
-                : 0
-            }
+            timerPercent={gameState.currentPlayerIndex === opponentPlayerIndex ? timerPercent : 0}
             isCurrentTurn={gameState.currentPlayerIndex === opponentPlayerIndex}
           />
         </div>
 
         {/* Board */}
-        <div className="w-full max-w-[min(85vw,420px)]">
+        <div className="w-full max-w-[min(85vw,400px)]">
           <LudoBoard
             players={gameState.players}
             movableTokens={isMyTurn ? gameState.movableTokens : []}
@@ -315,30 +285,25 @@ export default function GameView({
           />
         </div>
 
-        {/* Bottom player HUD (me) */}
+        {/* My HUD */}
         <div className="w-full">
           <PlayerHUD
             player={myPlayer}
             isActive={gameState.currentPlayerIndex === myPlayerIndex}
-            timerPercent={
-              gameState.currentPlayerIndex === myPlayerIndex
-                ? timerPercent
-                : 0
-            }
+            timerPercent={gameState.currentPlayerIndex === myPlayerIndex ? timerPercent : 0}
             isCurrentTurn={gameState.currentPlayerIndex === myPlayerIndex}
             isMe={true}
           />
         </div>
 
-        {/* Dice & event area */}
-        <div className="w-full flex flex-col items-center gap-3">
-          {/* Event message */}
+        {/* Dice & events */}
+        <div className="w-full flex flex-col items-center gap-2">
           <AnimatePresence>
             {eventMessage && (
               <motion.div
-                initial={{ opacity: 0, y: -10 }}
+                initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
+                exit={{ opacity: 0, y: -8 }}
                 className="text-sm font-medium text-stone-600 text-center"
               >
                 {eventMessage}
@@ -346,19 +311,13 @@ export default function GameView({
             )}
           </AnimatePresence>
 
-          {/* Not your turn indicator */}
           {!isMyTurn && gameState.phase !== "finished" && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex items-center gap-2 text-stone-500 text-sm"
-            >
-              <div className="animate-pulse">⏳</div>
+            <div className="flex items-center gap-2 text-stone-500 text-sm">
+              <span className="animate-pulse">⏳</span>
               <span>Waiting for {opponentPlayer.name}...</span>
-            </motion.div>
+            </div>
           )}
 
-          {/* Dice roller */}
           <DiceRoller
             diceValue={gameState.diceValue}
             canRoll={gameState.phase === "rolling" && !gameState.hasRolled && isMyTurn}
@@ -366,20 +325,12 @@ export default function GameView({
             onRoll={handleRoll}
           />
 
-          {/* Instruction */}
           {gameState.phase === "moving" && gameState.movableTokens.length > 1 && isMyTurn && (
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-xs text-stone-400"
-            >
-              Tap a glowing token to move it
-            </motion.p>
+            <p className="text-xs text-stone-400">Tap a glowing token to move it</p>
           )}
         </div>
       </div>
 
-      {/* Victory overlay */}
       {gameState.winner && (
         <VictoryScreen
           winner={gameState.winner}

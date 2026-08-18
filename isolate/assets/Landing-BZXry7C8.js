@@ -1,4 +1,4 @@
-import{a as o,j as e,m as n,A as O}from"./framer-motion-BS74gQnS.js";import{u as $,a as S,T as v,C as t,P as T}from"./index-BRQQ3dD3.js";import"./radix-ui-DOF4EDOj.js";import"./react-vendor-DC_aiPEZ.js";function z(){return e.jsxs("div",{className:"w-28 h-28 rounded-3xl overflow-hidden relative",style:{boxShadow:`
+import{a as o,j as e,m as n,A as O}from"./framer-motion-BS74gQnS.js";import{u as $,a as S,T as v,C as t,P as T}from"./index-DboOPpl2.js";import"./radix-ui-DOF4EDOj.js";import"./react-vendor-DC_aiPEZ.js";function z(){return e.jsxs("div",{className:"w-28 h-28 rounded-3xl overflow-hidden relative",style:{boxShadow:`
           0 12px 40px rgba(0,0,0,0.12),
           inset 0 2px 0 rgba(255,255,255,0.5),
           0 0 0 1px rgba(255,255,255,0.3)
