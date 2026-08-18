@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import type { PlayerColor } from "@/lib/game/constants";
 import { COLOR_HEX, TOKENS_PER_PLAYER } from "@/lib/game/constants";
 import type { PlayerState } from "@/lib/game/logic";
+import { isFinished } from "@/lib/game/logic";
 
 interface PlayerHUDProps {
   player: PlayerState;
@@ -24,7 +25,7 @@ export default function PlayerHUD({
   isCurrentTurn,
 }: PlayerHUDProps) {
   const hex = COLOR_HEX[player.color];
-  const finishedCount = player.tokens.filter((t) => t.position >= 58).length;
+  const finishedCount = player.tokens.filter((t) => isFinished(t.position)).length;
 
   return (
     <motion.div

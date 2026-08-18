@@ -129,35 +129,38 @@ export function calculateLandingPosition(
     return diceValue === 6 ? START_POSITIONS[color] : -1;
   }
 
-  if (isOnTrack(currentPosition)) {
-    const lastStep = LAST_STEPS[color];
-
-    if (currentPosition === lastStep) {
-      if (diceValue <= HOME_COL_LENGTH) {
-        return TOTAL_PATH_STEPS + (diceValue - 1);
-      }
-      return currentPosition;
-    }
-
-    let newPos = currentPosition + diceValue;
-
-    if (newPos > lastStep && currentPosition <= lastStep) {
-      return currentPosition;
-    }
-
-    if (newPos >= TOTAL_PATH_STEPS) {
-      newPos -= TOTAL_PATH_STEPS;
-    }
-
-    return newPos;
+  if (isFinished(currentPosition)) {
+    return currentPosition;
   }
 
   if (isInHomeColumn(currentPosition)) {
     const newPos = currentPosition + diceValue;
     if (newPos > FINISHED_POSITION) {
-      return currentPosition;
+      return currentPosition; // Can't overshoot home
     }
     return newPos;
+  }
+
+  if (isOnTrack(currentPosition)) {
+    const lastStep = LAST_STEPS[color];
+
+    // Compute remaining steps to reach the lastStep cell, then 1 more to enter home column
+    const remainingSteps =
+      ((lastStep - currentPosition + TOTAL_PATH_STEPS) % TOTAL_PATH_STEPS) + 1;
+
+    if (diceValue < remainingSteps) {
+      // Still on the main track — advance (wrapping around the circular path)
+      return (currentPosition + diceValue) % TOTAL_PATH_STEPS;
+    }
+
+    // Entering or already in the home column
+    const homeSteps = diceValue - remainingSteps; // 0 = land on first home column cell
+    if (homeSteps <= HOME_COL_LENGTH) {
+      return TOTAL_PATH_STEPS + homeSteps;
+    }
+
+    // Would overshoot home — stay put
+    return currentPosition;
   }
 
   return currentPosition;

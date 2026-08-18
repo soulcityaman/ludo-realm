@@ -29,9 +29,9 @@ export const TWO_PLAYER_COLORS: PlayerColor[] = ["red", "yellow"];
 export const BOARD_SIZE = 15;
 export const TOKENS_PER_PLAYER = 4;
 export const TOTAL_PATH_STEPS = 52;
-export const HOME_COL_LENGTH = 6;
-/** Total positions including path (0-51) + home column (52-57) + finished (58) */
-export const FINISHED_POSITION = TOTAL_PATH_STEPS + HOME_COL_LENGTH; // 58
+export const HOME_COL_LENGTH = 5;
+/** Total positions including path (0-51) + home column (52-56) + finished/home (57) */
+export const FINISHED_POSITION = TOTAL_PATH_STEPS + HOME_COL_LENGTH; // 57
 
 // ─── Turn Rules ──────────────────────────────────────────────────────
 export const TURN_TIME_LIMIT = 20; // seconds

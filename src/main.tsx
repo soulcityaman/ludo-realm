@@ -3,9 +3,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
-import React, { StrictMode, useEffect, lazy, Suspense, useState, useCallback } from "react";
+import React, { StrictMode, lazy, Suspense, useState, useCallback } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router";
 import "./index.css";
 
 import type { PlayerColor } from "@/lib/game/constants";
@@ -14,7 +13,6 @@ import { TWO_PLAYER_COLORS } from "@/lib/game/constants";
 // Lazy load route components
 const Landing = lazy(() => import("./pages/Landing.tsx"));
 const GameView = lazy(() => import("./components/ludo/GameView.tsx"));
-const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 function RouteLoading() {
   return (
@@ -72,42 +70,27 @@ export default function App() {
     yellow: "Player 3",
     blue: "Player 4",
   });
-  const [roomCode, setRoomCode] = useState<string | null>(null);
 
   const handleCreateRoom = useCallback((hostName: string, hostColor: PlayerColor) => {
-    // For V1 local play, start game directly
     const names = { ...playerNames };
     names[hostColor] = hostName;
-    // Assign opponent
     const opponentColor = TWO_PLAYER_COLORS.find((c) => c !== hostColor) ?? "yellow";
-    if (hostColor === "red") {
-      names.yellow = hostName + " (Guest)";
-    } else {
-      names.red = hostName + " (Guest)";
-    }
+    names[opponentColor] = "Opponent";
     setPlayerNames(names);
-    setRoomCode("LOCAL");
     setView("game");
   }, [playerNames]);
 
-  const handleJoinRoom = useCallback((code: string, guestName: string, guestColor: PlayerColor) => {
-    // For V1 local play, start game directly
+  const handleJoinRoom = useCallback((_code: string, guestName: string, guestColor: PlayerColor) => {
     const names = { ...playerNames };
     names[guestColor] = guestName;
     const hostColor = TWO_PLAYER_COLORS.find((c) => c !== guestColor) ?? "red";
-    if (guestColor === "yellow") {
-      names.red = "Player 1";
-    } else {
-      names.yellow = "Player 1";
-    }
+    names[hostColor] = "Opponent";
     setPlayerNames(names);
-    setRoomCode(code);
     setView("game");
   }, [playerNames]);
 
   const handleLeave = useCallback(() => {
     setView("landing");
-    setRoomCode(null);
   }, []);
 
   return (

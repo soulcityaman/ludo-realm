@@ -15,7 +15,6 @@ import {
   getHomeColumnColor,
   getArmCellColor,
   getBoardPosition,
-  SAFE_PATH_INDICES,
 } from "@/lib/game/constants";
 import type { PlayerState } from "@/lib/game/logic";
 
@@ -80,7 +79,7 @@ const HomeColumnCell = memo(function HomeColumnCell({
         backgroundColor: index === 5 ? hex.dark : hex.base,
       }}
     >
-      {index === 5 && (
+      {index === 4 && (
         <svg
           viewBox="0 0 24 24"
           className="w-[45%] h-[45%] text-white"

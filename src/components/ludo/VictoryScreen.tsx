@@ -7,6 +7,7 @@ import confetti from "canvas-confetti";
 import type { PlayerColor } from "@/lib/game/constants";
 import { COLOR_HEX } from "@/lib/game/constants";
 import type { GameState } from "@/lib/game/logic";
+import { isFinished } from "@/lib/game/logic";
 
 interface VictoryScreenProps {
   winner: PlayerColor;
@@ -115,7 +116,7 @@ export default function VictoryScreen({
                   {p.name}
                 </div>
                 <div className="text-[10px] text-stone-400 mt-0.5">
-                  🎯 {p.captures} · 🏠 {p.tokens.filter((t) => t.position >= 58).length}/4
+                  🎯 {p.captures} · 🏠 {p.tokens.filter((t) => isFinished(t.position)).length}/4
                 </div>
               </div>
             );

@@ -1,0 +1,16 @@
+{
+  "name": "Ludo Online",
+  "short_name": "Ludo",
+  "description": "Play the classic Ludo board game online with friends",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F5F0E8",
+  "theme_color": "#E8606A",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
